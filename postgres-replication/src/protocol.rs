@@ -185,9 +185,9 @@ pub enum LogicalReplicationMessage {
 }
 
 impl LogicalReplicationMessage {
-    pub fn parse(buf: &Bytes) -> io::Result<Self> {
+    pub fn parse(buf_raw: &Bytes) -> io::Result<Self> {
         let mut buf = Buffer {
-            bytes: buf.clone(),
+            bytes: buf_raw.clone(),
             idx: 0,
         };
 
@@ -238,6 +238,7 @@ impl LogicalReplicationMessage {
                     name,
                     replica_identity,
                     columns,
+                    original_message: buf_raw.clone(),
                 })
             }
             TYPE_TAG => Self::Type(TypeBody {
@@ -259,7 +260,11 @@ impl LogicalReplicationMessage {
                     }
                 };
 
-                Self::Insert(InsertBody { rel_id, tuple })
+                Self::Insert(InsertBody {
+                    rel_id,
+                    tuple,
+                    original_message: buf_raw.clone()
+                })
             }
             UPDATE_TAG => {
                 let rel_id = buf.read_u32::<BigEndian>()?;
@@ -300,6 +305,7 @@ impl LogicalReplicationMessage {
                     key_tuple,
                     old_tuple,
                     new_tuple,
+                    original_message: buf_raw.clone(),
                 })
             }
             DELETE_TAG => {
@@ -324,6 +330,7 @@ impl LogicalReplicationMessage {
                     rel_id,
                     key_tuple,
                     old_tuple,
+                    original_message: buf_raw.clone(),
                 })
             }
             TRUNCATE_TAG => {
@@ -335,7 +342,11 @@ impl LogicalReplicationMessage {
                     rel_ids.push(buf.read_u32::<BigEndian>()?);
                 }
 
-                Self::Truncate(TruncateBody { options, rel_ids })
+                Self::Truncate(TruncateBody {
+                    options,
+                    rel_ids,
+                    original_message: buf_raw.clone(),
+                })
             }
             tag => {
                 return Err(io::Error::new(
@@ -572,6 +583,7 @@ pub struct RelationBody {
     name: Bytes,
     replica_identity: ReplicaIdentity,
     columns: Vec<Column>,
+    original_message: Bytes,
 }
 
 impl RelationBody {
@@ -604,6 +616,12 @@ impl RelationBody {
     pub fn columns(&self) -> &[Column] {
         &self.columns
     }
+
+    #[inline]
+    pub fn original_message(&self) -> &Bytes {
+        &self.original_message
+    }
+
 }
 
 /// A Type replication message
@@ -639,6 +657,7 @@ impl TypeBody {
 pub struct InsertBody {
     rel_id: u32,
     tuple: Tuple,
+    original_message: Bytes,
 }
 
 impl InsertBody {
@@ -653,6 +672,12 @@ impl InsertBody {
     pub fn tuple(&self) -> &Tuple {
         &self.tuple
     }
+
+    #[inline]
+    pub fn original_message(&self) -> &Bytes {
+        &self.original_message
+    }
+
 }
 
 /// An UPDATE statement
@@ -662,6 +687,7 @@ pub struct UpdateBody {
     old_tuple: Option<Tuple>,
     key_tuple: Option<Tuple>,
     new_tuple: Tuple,
+    original_message: Bytes,
 }
 
 impl UpdateBody {
@@ -690,6 +716,11 @@ impl UpdateBody {
     pub fn new_tuple(&self) -> &Tuple {
         &self.new_tuple
     }
+
+    #[inline]
+    pub fn original_message(&self) -> &Bytes {
+        &self.original_message
+    }
 }
 
 /// A DELETE statement
@@ -698,6 +729,7 @@ pub struct DeleteBody {
     rel_id: u32,
     old_tuple: Option<Tuple>,
     key_tuple: Option<Tuple>,
+    original_message: Bytes,
 }
 
 impl DeleteBody {
@@ -720,6 +752,11 @@ impl DeleteBody {
     pub fn old_tuple(&self) -> Option<&Tuple> {
         self.old_tuple.as_ref()
     }
+
+    #[inline]
+    pub fn original_message(&self) -> &Bytes {
+        &self.original_message
+    }
 }
 
 /// A TRUNCATE statement
@@ -727,6 +764,7 @@ impl DeleteBody {
 pub struct TruncateBody {
     options: i8,
     rel_ids: Vec<u32>,
+    original_message: Bytes,
 }
 
 impl TruncateBody {
@@ -740,6 +778,11 @@ impl TruncateBody {
     /// Option bits for TRUNCATE: 1 for CASCADE, 2 for RESTART IDENTITY
     pub fn options(&self) -> i8 {
         self.options
+    }
+
+    #[inline]
+    pub fn original_message(&self) -> &Bytes {
+        &self.original_message
     }
 }
 
