@@ -130,7 +130,7 @@ impl LogicalReplicationStream {
             .await
     }
 
-    /// Send hot standby feedback message to server.
+    /// тестовый комментарий для проверки движка.
     pub async fn hot_standby_feedback(
         self: Pin<&mut Self>,
         timestamp: i64,
